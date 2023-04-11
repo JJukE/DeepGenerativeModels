@@ -20,6 +20,7 @@ from torch.utils.data.distributed import DistributedSampler
 
 from models.RealNVP import *
 from deepul.hw2_helper import *
+from arguments import parsing
 
 
 # Added DDP implementations
@@ -110,14 +111,16 @@ class Solver(object):
             epoch_loss = np.mean(self.batch_loss_history)
             tqdm.write(f'Epoch {epoch_i} Loss: {epoch_loss:.2f}')
 
-            if epoch_i % 10 == 0:
-                self.save_model("realnvp{}.model".format(str(epoch_i)))
+            if epoch_i % self.save_epoch_step == 0:
+                self.save_model_module(os.path.join(self.output_dir, "realnvp{}.pt".format(str(epoch_i))))
             train_losses.append(epoch_loss)
             val_losses.append(self.get_loss(self.val_loader))
-            # np.save("train_losses.npy", np.array(train_losses))
-            # np.save("val_losses.npy", np.array(val_losses))
+            np.save(os.path.join(self.output_dir, "train_losses.npy"), np.array(train_losses))
+            np.save(os.path.join(self.output_dir, "val_losses.npy"), np.array(val_losses))
 
-        # self.save_model("realnvp_final.model")
+        self.save_model_module(os.path.join(self.output_dir, "q3_a_ckpt_{}_model_module.pt".format(self.n_epochs)))
+        self.save_model_state_dict(os.path.join(self.output_dir, "q3_a_ckpt_{}_model_state_dict.pt".format(self.n_epochs)))
+        self.save_model_module_state_dict(os.path.join(self.output_dir, "q3_a_ckpt_{}_model_module_state_dict.pt".format(self.n_epochs)))
         return train_losses, val_losses
 
     def get_loss(self, loader):
@@ -178,7 +181,6 @@ class Solver(object):
             results = self.preprocess(logit_results, reverse=True)
             return results.cpu().numpy()
     
-    # 확인
     def save_model(self, filename):
         if self.local_rank == 0:
             torch.save(self.flow, filename)
@@ -199,22 +201,22 @@ class Solver(object):
         self.flow = torch.load(filename, map_location="cuda")
 
 def get_q3_data():
-    data_dir = get_data_dir(2)
-    data_dir = "/root/dev/deepul/homeworks/hw2/data"
+    args = parsing()
+    data_dir = args.data_dir
     train_data, test_data = load_pickled_data(join(data_dir, 'celeb.pkl'))
     return train_data, test_data
 
 def main():
+    args = parsing()
+    
     dist.init_process_group(backend='nccl')
     local_rank = int(os.environ["LOCAL_RANK"])
     torch.cuda.set_device(local_rank)
     num_gpus = torch.distributed.get_world_size()
     
-    solver = Solver(n_epochs=100, local_rank=local_rank)
+    solver = Solver(n_epochs=args.num_epoch, local_rank=local_rank, args=args)
     solver.build()
-    train, val = solver.train()
-
+    solver.train()
 
 if __name__ == "__main__":
     main()
-    

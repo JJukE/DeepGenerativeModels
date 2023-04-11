@@ -112,22 +112,15 @@ class Solver(object):
             tqdm.write(f'Epoch {epoch_i} Loss: {epoch_loss:.2f}')
 
             if epoch_i % self.save_epoch_step == 0:
-                self.save_model("realnvp{}.model".format(str(epoch_i)))
+                self.save_model_module(os.path.join(self.output_dir, "realnvp{}.model".format(str(epoch_i))))
             train_losses.append(epoch_loss)
             val_losses.append(self.get_loss(self.val_loader))
-            np.save(os.path.join(self.output_dir, "bad_train_losses.npy"), np.array(train_losses))
-            np.save(os.path.join(self.output_dir, "bad_val_losses.npy"), np.array(val_losses))
+            np.save(os.path.join(self.output_dir, "train_losses.npy"), np.array(train_losses))
+            np.save(os.path.join(self.output_dir, "val_losses.npy"), np.array(val_losses))
 
-        self.save_model(os.path.join(self.output_dir, "q3_a_ckpt_100_model.pt"))
-        self.save_model_module(os.path.join(self.output_dir, "q3_a_ckpt_100_model_module.pt"))
-        self.save_model(os.path.join(self.output_dir, "q3_a_ckpt_100_model_state_dict.pt"))
-        self.save_model(os.path.join(self.output_dir, "q3_a_ckpt_100_model_module_state_dict.pt"))
-        np.save(os.path.join(self.output_dir, "bad_train_losses.npy", np.array(train_losses)))
-        np.save(os.path.join(self.output_dir, "bad_val_losses.npy", np.array(val_losses)))  
-            # np.save("train_losses.npy", np.array(train_losses))
-            # np.save("val_losses.npy", np.array(val_losses))
-
-        # self.save_model("realnvp_final.model")
+        self.save_model_module(os.path.join(self.output_dir, "q3_a_ckpt_{}_model_module.pt".format(self.n_epochs)))
+        self.save_model_state_dict(os.path.join(self.output_dir, "q3_a_ckpt_{}_model_state_dict.pt".format(self.n_epochs)))
+        self.save_model_module_state_dict(os.path.join(self.output_dir, "q3_a_ckpt_{}_model_module_state_dict.pt".format(self.n_epochs)))
         return train_losses, val_losses
 
     def get_loss(self, loader):
@@ -188,7 +181,6 @@ class Solver(object):
             results = self.preprocess(logit_results, reverse=True)
             return results.cpu().numpy()
     
-    # 확인
     def save_model(self, filename):
         if self.local_rank == 0:
             torch.save(self.flow, filename)
@@ -249,16 +241,15 @@ class BadSolver(Solver):
             tqdm.write(f'Epoch {epoch_i} Loss: {epoch_loss:.2f}')
 
             if epoch_i % self.save_epoch_step == 0:
-                self.save_model_module(self.output_dir, "badrealnvp{}.model".format(str(epoch_i)))
+                self.save_model_module(os.path.join(self.output_dir, "badrealnvp{}.pt".format(str(epoch_i))))
             train_losses.append(epoch_loss)
             val_losses.append(self.get_loss(self.val_loader))
             np.save(os.path.join(self.output_dir, "bad_train_losses.npy"), np.array(train_losses))
             np.save(os.path.join(self.output_dir, "bad_val_losses.npy"), np.array(val_losses))
 
-        self.save_model(os.path.join(self.output_dir, "q3_b_ckpt_100_model.pt"))
-        self.save_model_module(os.path.join(self.output_dir, "q3_b_ckpt_100_model_module.pt"))
-        self.save_model_state_dict(os.path.join(self.output_dir, "q3_b_ckpt_100_model_state_dict.pt"))
-        self.save_model_module_state_dict(os.path.join(self.output_dir, "q3_b_ckpt_100_model_module_state_dict.pt"))
+        self.save_model_module(os.path.join(self.output_dir, "q3_b_ckpt_{}_model_module.pt".format(self.n_epochs)))
+        self.save_model_state_dict(os.path.join(self.output_dir, "q3_b_ckpt_{}_model_state_dict.pt".format(self.n_epochs)))
+        self.save_model_module_state_dict(os.path.join(self.output_dir, "q3_b_ckpt_{}_model_module_state_dict.pt".format(self.n_epochs)))
         np.save(os.path.join(self.output_dir, "bad_train_losses.npy"), np.array(train_losses))
         np.save(os.path.join(self.output_dir, "bad_val_losses.npy"), np.array(val_losses))
         return train_losses, val_losses
