@@ -127,13 +127,12 @@ class Solver(object):
         if self.local_rank == 0:
             torch.save(self.flow.module, filename)
 
-
 class MultiSolver(Solver):
     def __init__(self, learning_rate=5e-4, n_epochs=128, local_rank=None, args=None):
         super().__init__(learning_rate, n_epochs, local_rank, args)
 
     def build(self):
-        self.flow = MultiScaleRealNVP(in_channels=1, num_scales=4).cuda()
+        self.flow = MultiScaleRealNVP().cuda()
         self.flow = DDP(module=self.flow, device_ids=[self.local_rank])
         self.optimizer = torch.optim.Adam(self.flow.parameters(), lr=self.learning_rate)
 
@@ -168,16 +167,79 @@ class MultiSolver(Solver):
             epoch_loss = np.mean(self.batch_loss_history)
             tqdm.write(f'Epoch {epoch_i} Loss: {epoch_loss:.2f}')
 
-            if epoch_i % self.save_epoch_step == 0:
-                self.save_model_module(os.path.join(self.output_dir, "q4_a_ckpt_{}_model_module.pt".format(str(epoch_i))))
             train_losses.append(epoch_loss)
             val_losses.append(self.get_loss(self.val_loader))
-            np.save(os.path.join(self.output_dir, "multi_train_losses.npy"), np.array(train_losses))
-            np.save(os.path.join(self.output_dir, "multi_val_losses.npy"), np.array(val_losses))
 
-        np.save(os.path.join(self.output_dir, "multi_train_losses.npy"), np.array(train_losses))
-        np.save(os.path.join(self.output_dir, "multi_val_losses.npy"), np.array(val_losses))
+            if epoch_i % self.save_epoch_step == 0:
+                self.save_model_module(os.path.join(self.output_dir, "q4_a_ckpt_{}_model_module.pt".format(epoch_i)))
+                np.save(os.path.join(self.output_dir, "multi_train_losses_{}.npy".format(epoch_i)), np.array(train_losses))
+                np.save(os.path.join(self.output_dir, "multi_val_losses_{}.npy".format(epoch_i)), np.array(val_losses))
+
         return train_losses, val_losses
+
+    def get_loss(self, loader):
+        """Compute error on provided data set"""
+        errors = []
+        # cuda.synchronize()
+        start = time.time()
+
+        self.flow.eval()
+
+        for image in loader:
+            with torch.no_grad():
+                image = Variable(image).to(device)
+                logit_x, log_det = self.preprocess(image.float())
+                log_prob = self.flow.module.log_prob(logit_x)
+                log_prob += log_det
+
+                loss = -torch.mean(log_prob) / (3.0 * 32.0 * 32.0)
+                error = float(loss.data)
+                errors.append(error)
+
+        # cuda.synchronize()
+        time_test = time.time() - start
+        log_string = f'Calc done! | It took {time_test:.1f}s | '
+        log_string += f'Loss: {np.mean(errors):.2f}'
+        tqdm.write(log_string)
+        return np.mean(errors)
+
+    def sample(self, num_samples):
+        with torch.no_grad():
+            raw_samples = self.flow.sample(num_samples).cpu()
+            samples = self.preprocess(raw_samples, reverse=True)
+            return samples.cpu().numpy()
+
+    def interpolate(self):
+        self.flow.eval()
+        good = [5, 13, 16, 19, 22]
+        indices = []
+        for index in good:
+            indices.append(index*2)
+            indices.append(index*2+1)
+        with torch.no_grad():
+            actual_images = next(iter(self.val_loader))[indices].to('cpu')
+            assert actual_images.shape[0] % 2 == 0
+            logit_actual_images, _ = self.preprocess(actual_images.float(), dequantize=False)
+            latent_images, _ = self.flow.f(logit_actual_images)
+            latents = []
+            for i in range(0, actual_images.shape[0], 2):
+                a = latent_images[i:i+1]
+                b = latent_images[i + 1:i+2]
+                diff = (b - a)/5.0
+                latents.append(a)
+                for j in range(1, 5):
+                    latents.append(a + diff * float(j))
+                latents.append(b)
+            latents = torch.cat(latents, dim=0)
+            logit_results = self.flow.g(latents)
+            results = self.preprocess(logit_results, reverse=True)
+            return results.cpu().numpy()
+
+    def save_model(self, filename):
+        torch.save(self.flow.module, filename)
+
+    def load_model(self, filename):
+        self.flow = torch.load(filename, map_location="cuda")
 
 def get_q3_data():
     args = parsing()
@@ -191,7 +253,6 @@ def main():
     dist.init_process_group(backend='nccl')
     local_rank = int(os.environ["LOCAL_RANK"])
     torch.cuda.set_device(local_rank)
-    num_gpus = torch.distributed.get_world_size()
     
     solver = MultiSolver(n_epochs=args.num_epoch, local_rank=local_rank, args=args)
     solver.build()

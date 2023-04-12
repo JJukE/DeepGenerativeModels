@@ -7,9 +7,9 @@ def parsing(mode="args"):
     
     parser.add_argument("--output_dir", type=str, default="/root/dev/deepul/exp")
     parser.add_argument("--data_dir", type=str, default="/root/dev/deepul/homeworks/hw2/data")
-    parser.add_argument("--num_epoch", type=int, default=200)
+    parser.add_argument("--num_epoch", type=int, default=100)
     parser.add_argument("--batch_size", type=int, default=128)
-    parser.add_argument("--save_epoch_step", type=int, default=10)
+    parser.add_argument("--save_epoch_step", type=int, default=50)
     
     if mode == "args":
         args = parser.parse_args()
