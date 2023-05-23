@@ -17,3 +17,5 @@ exp/
 *.model
 *.pt
 *.pth
+data/
+results/

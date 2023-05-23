@@ -82,7 +82,7 @@ def calculate_is(samples):
     assert (len(samples[0].shape) == 3)
 
     model = GoogLeNet().to(ptu.device)
-    model.load_state_dict(torch.load("deepul/deepul/hw4_utils/classifier.pt"))
+    model.load_state_dict(torch.load("./deepul/hw4_utils/classifier.pt"))
     softmax = nn.Sequential(model, nn.Softmax(dim=1))
 
     bs = 100
@@ -166,7 +166,7 @@ def q3_save_results(fn):
 def get_colored_mnist(data):
     # from https://www.wouterbulten.nl/blog/tech/getting-started-with-gans-2-colorful-mnist/
     # Read Lena image
-    lena = PILImage.open('deepul/deepul/hw4_utils/lena.jpg')
+    lena = PILImage.open('./deepul/hw4_utils/lena.jpg')
 
     # Resize
     batch_resized = np.asarray([scipy.ndimage.zoom(image, (2.3, 2.3, 1), order=1) for image in data])
